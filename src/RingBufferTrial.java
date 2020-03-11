@@ -12,11 +12,62 @@ public class RingBufferTrial {
 
 //        ringBufferTrial.create();//创建RingBuffer
 //        ringBufferTrial.put();//增加元素
+        ringBufferTrial.barrier();//序号栅栏
 //        ringBufferTrial.translator();//使用翻译器增加元素
 //        ringBufferTrial.capacity();//获取体积
 //        ringBufferTrial.cursor();//指针操作
 //        ringBufferTrial.low();//获取最小指针
 //        ringBufferTrial.back();//反向读取
+
+    }
+
+    private void barrier() {
+        WaitStrategy waitStrategy = new BlockingWaitStrategy();
+        EventFactory eventFactory = new OneEventFactory();
+
+        RingBuffer<Integer[]> ringBuffer = RingBuffer.createSingleProducer(eventFactory, 4, waitStrategy);
+
+//        ringBuffer.newBarrier();
+
+        //增加消费者
+        Sequence customer = new Sequence();
+        ringBuffer.addGatingSequences(customer);
+        SequenceBarrier barrier = ringBuffer.newBarrier();
+
+
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+
+                try {
+                    while (true) {
+                        long n = customer.get();
+                        long now = barrier.waitFor(++n);
+
+                        do {
+                            System.out.println("[" + n + "]event is " + ringBuffer.get(n)[0]);
+                        }
+                        while (++n <= now);
+                        customer.set(now);
+                    }
+
+                } catch (AlertException e) {
+                    e.printStackTrace();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                } catch (TimeoutException e) {
+                    e.printStackTrace();
+                }
+            }
+        }).start();
+
+
+        for (int i = 0; i < 6; i++) {
+            long sequence = ringBuffer.next();
+            System.out.println("sequence is " + sequence);
+            ringBuffer.publish(sequence);
+        }
+
 
     }
 
