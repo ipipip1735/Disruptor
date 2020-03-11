@@ -13,7 +13,7 @@ public class RingBufferTrial {
 //        ringBufferTrial.create();//创建RingBuffer
 //        ringBufferTrial.put();//增加元素
 //        ringBufferTrial.barrier();//序号栅栏
-        ringBufferTrial.poller();//序号栅栏
+        ringBufferTrial.poller();//轮询器
 //        ringBufferTrial.translator();//使用翻译器增加元素
 //        ringBufferTrial.capacity();//获取体积
 //        ringBufferTrial.cursor();//指针操作
