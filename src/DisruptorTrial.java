@@ -42,7 +42,7 @@ public class DisruptorTrial {
         //注册多个消费者，1和2并行执行，然后3、4、5再并行执行
         disruptor.handleEventsWith(new OneEventHandler(1), new OneEventHandler(2))
                 .then(new OneEventHandler(3), new OneEventHandler(4), new OneEventHandler(5));
-        disruptor.start();//启动线程
+        disruptor.start();//启动消费者线程
 
 
         //发送数据到RingBuffer
@@ -60,6 +60,8 @@ public class DisruptorTrial {
                 }
             });
         }
+
+        disruptor.shutdown();//关闭消费者线程
     }
 
     private void multipleProducer() {
@@ -90,7 +92,7 @@ public class DisruptorTrial {
                 }
             }
         });
-        disruptor.start();
+        disruptor.start();//启动消费者线程
 
 
         //生产者
@@ -123,6 +125,8 @@ public class DisruptorTrial {
         executorService.submit(task);
         executorService.submit(task);
 
+        disruptor.shutdown();//关闭消费者线程
+        executorService.shutdown();//关闭生产者线程
 
     }
 
@@ -162,7 +166,7 @@ public class DisruptorTrial {
         //注册多个消费者
 //        disruptor.handleEventsWith(new OneEventHandler(1))
 //                .handleEventsWith(new OneEventHandler(2));
-        disruptor.start();//启动线程
+        disruptor.start();//启动消费者线程
 
 
         //发送数据到RingBuffer
@@ -180,6 +184,8 @@ public class DisruptorTrial {
                 }
             });
         }
+
+        disruptor.shutdown();//关闭消费者线程
     }
 
     class OneEventFactory implements EventFactory<Integer[]> {

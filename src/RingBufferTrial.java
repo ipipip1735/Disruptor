@@ -12,7 +12,8 @@ public class RingBufferTrial {
 
 //        ringBufferTrial.create();//创建RingBuffer
 //        ringBufferTrial.put();//增加元素
-        ringBufferTrial.barrier();//序号栅栏
+//        ringBufferTrial.barrier();//序号栅栏
+        ringBufferTrial.poller();//序号栅栏
 //        ringBufferTrial.translator();//使用翻译器增加元素
 //        ringBufferTrial.capacity();//获取体积
 //        ringBufferTrial.cursor();//指针操作
@@ -21,13 +22,77 @@ public class RingBufferTrial {
 
     }
 
+    private void poller() {
+
+        WaitStrategy waitStrategy = new BlockingWaitStrategy();
+        EventFactory eventFactory = new OneEventFactory();
+
+        RingBuffer<Integer[]> ringBuffer = RingBuffer.createSingleProducer(eventFactory, 16, waitStrategy);
+
+
+        //增加消费者
+        Sequence customer = new Sequence();
+        ringBuffer.addGatingSequences(customer);
+        SequenceBarrier barrier = ringBuffer.newBarrier();
+        EventPoller<Integer[]> poller = ringBuffer.newPoller();
+
+
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                while (true) {
+                    try {
+                        barrier.waitFor(customer.get() + 2);
+
+                        EventPoller.PollState pollState = poller.poll(new EventPoller.Handler<Integer[]>() {
+                            @Override
+                            public boolean onEvent(Integer[] event, long sequence, boolean endOfBatch) throws Exception {
+                                System.out.println("~~onEvent~~");
+                                System.out.println("sequence is " + sequence);
+                                System.out.println("endOfBatch is " + endOfBatch);
+                                System.out.println("event is " + event[0]);
+
+                                return true;
+                            }
+                        });
+                        System.out.println("pollState is " + pollState);
+
+                    } catch (AlertException e) {
+                        e.printStackTrace();
+                        break;
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    } catch (TimeoutException e) {
+                        e.printStackTrace();
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+
+                }
+            }
+        }).start();
+
+
+        for (int i = 0; i < 6; i++) {
+            long sequence = ringBuffer.next();
+            System.out.println("sequence is " + sequence);
+            ringBuffer.publish(sequence);
+
+//            try {
+//                Thread.sleep(500L);
+//            } catch (InterruptedException e) {
+//                e.printStackTrace();
+//            }
+        }
+
+        barrier.alert();
+    }
+
     private void barrier() {
         WaitStrategy waitStrategy = new BlockingWaitStrategy();
         EventFactory eventFactory = new OneEventFactory();
 
         RingBuffer<Integer[]> ringBuffer = RingBuffer.createSingleProducer(eventFactory, 4, waitStrategy);
-
-//        ringBuffer.newBarrier();
 
         //增加消费者
         Sequence customer = new Sequence();
@@ -38,25 +103,34 @@ public class RingBufferTrial {
         new Thread(new Runnable() {
             @Override
             public void run() {
+                long n;
+                long now;
 
-                try {
-                    while (true) {
-                        long n = customer.get();
-                        long now = barrier.waitFor(++n);
+                while (true) {
+                    n = customer.get();
+                    try {
+                        now = barrier.waitFor(++n);
 
                         do {
                             System.out.println("[" + n + "]event is " + ringBuffer.get(n)[0]);
+                            try {
+                                Thread.sleep(1000L);
+                            } catch (InterruptedException e) {
+                                e.printStackTrace();
+                            }
                         }
                         while (++n <= now);
+
                         customer.set(now);
+                    } catch (AlertException e) {
+                        e.printStackTrace();
+                        break;
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    } catch (TimeoutException e) {
+                        e.printStackTrace();
                     }
 
-                } catch (AlertException e) {
-                    e.printStackTrace();
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                } catch (TimeoutException e) {
-                    e.printStackTrace();
                 }
             }
         }).start();
@@ -67,6 +141,8 @@ public class RingBufferTrial {
             System.out.println("sequence is " + sequence);
             ringBuffer.publish(sequence);
         }
+
+        barrier.alert();//关闭消费者线程
 
 
     }
