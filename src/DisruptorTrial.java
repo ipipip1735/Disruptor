@@ -3,6 +3,8 @@ import com.lmax.disruptor.dsl.Disruptor;
 import com.lmax.disruptor.dsl.ProducerType;
 
 import java.nio.ByteBuffer;
+import java.util.Random;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 
@@ -15,355 +17,169 @@ public class DisruptorTrial {
     public static void main(String[] args) {
         DisruptorTrial disruptorTrial = new DisruptorTrial();
 
-        disruptorTrial.disruptor();
-//        disruptorTrial.customer();
-//        disruptorTrial.productor();
-//        disruptorTrial.disruptorWith();
-//        disruptorTrial.barrier();
-//        disruptorTrial.poller();
-//        disruptorTrial.sequence();
-//        disruptorTrial.sequencer();
+//        disruptorTrial.singleProducer();//单生产者模式
+//        disruptorTrial.multipleProducer();//多生产者模式
 
-
+        disruptorTrial.dependency();//消费依赖
     }
 
-    private void customer() {
-        Disruptor<Integer[]> disruptor = new Disruptor(new OneEventFactory(), 4, Executors.defaultThreadFactory(), ProducerType.SINGLE, new BlockingWaitStrategy());
+    private void dependency() {
 
-        RingBuffer<Integer[]> ringBuffer = disruptor.getRingBuffer();
-        SequenceBarrier barrier = ringBuffer.newBarrier();
-
-
-        Thread thread = new Thread(new Runnable() {
-            @Override
-            public void run() {
-
-                try {
-                    System.out.println("waiting...");
-                    long seq = barrier.waitFor(3);
-                    System.out.println("seq is " + seq);
-                } catch (AlertException e) {
-                    e.printStackTrace();
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                } catch (TimeoutException e) {
-                    e.printStackTrace();
-                }
-
-            }
-        });
-        thread.start();
-
-
-        for (int i = 0; i < 9; i++) {
-            ringBuffer.publish(i);
-
-            System.out.println("thread is " + thread.getState());
-            try {
-                Thread.sleep(3000L);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-        }
-
-
-    }
-
-    private void productor() {
-        Thread main = Thread.currentThread();
 
         WaitStrategy waitStrategy = new BlockingWaitStrategy();
-        Disruptor<Integer[]> disruptor = new Disruptor(new OneEventFactory(), 2, Executors.defaultThreadFactory(), ProducerType.SINGLE, waitStrategy);
+        EventFactory eventFactory = new OneEventFactory();
+        ThreadFactory threadFactory = new OneThreadFactory();
+
+        Disruptor<Integer[]> disruptor = new Disruptor(eventFactory, 8, threadFactory, ProducerType.SINGLE, waitStrategy);
+
+        System.out.println(disruptor);
+
+        //打印RingBuffer
+        for (int i = 0; i < disruptor.getRingBuffer().getBufferSize(); i++) {
+            System.out.println("[" + i + "]event is " + disruptor.getRingBuffer().get(i)[0]);
+        }
+
+        //注册多个消费者，1和2并行执行，然后3、4、5再并行执行
+        disruptor.handleEventsWith(new OneEventHandler(1), new OneEventHandler(2))
+                .then(new OneEventHandler(3), new OneEventHandler(4), new OneEventHandler(5));
+        disruptor.start();//启动线程
 
 
+        //发送数据到RingBuffer
+        for (int i = 0; i < 2; i++) {
 
-//        RingBuffer<Integer[]> ringBuffer = disruptor.getRingBuffer();
-        RingBuffer<Integer[]> ringBuffer = RingBuffer.createSingleProducer(new OneEventFactory(), 2);
-        SequenceBarrier barrier = ringBuffer.newBarrier();
-        Sequence sequence = new Sequence();
-        ringBuffer.addGatingSequences(sequence);
+            disruptor.publishEvent(new EventTranslator<Integer[]>() {
+                @Override
+                public void translateTo(Integer[] event, long sequence) {
+//                    System.out.println("~~translateTo~~");
+//                    System.out.println("sequence is " + sequence);
+//                    System.out.println("event is " + event[0]);
 
-
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-
-                try {
-                    for (int i = 0; i < 10; i++) {
-
-                        long seq = barrier.waitFor(i);
-                        sequence.set(seq);
-
-                        System.out.println("[c]seq is " + seq);
-                        System.out.println("[c]main is " + main.getState());
-                        Thread.sleep(1000L);
-                    }
-
-
-                } catch (AlertException e) {
-                    e.printStackTrace();
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                } catch (TimeoutException e) {
-                    e.printStackTrace();
+                    event[0] = Integer.valueOf(999);
+//                    System.out.println(Thread.currentThread());
                 }
-
-            }
-        }).start();
-
-
-        for (int i = 0; i < 9; i++) {
-            System.out.println(i);
-
-            long s = ringBuffer.next();
-            System.out.println("pulish is " + s);
-
-
-//            System.out.println("thread is " + thread.getState());
-//            try {
-//                Thread.sleep(100L);
-//            } catch (InterruptedException e) {
-//                e.printStackTrace();
-//            }
+            });
         }
-
-
     }
 
-    private void sequencer() {
-        System.out.println("start");
-        SingleProducerSequencer sequencer = new SingleProducerSequencer(4, new OneWaitStrategy());
-        SequenceBarrier sequenceBarrier = sequencer.newBarrier(new Sequence());
-        try {
-            sequenceBarrier.waitFor(3);
-        } catch (AlertException e) {
-            e.printStackTrace();
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        } catch (TimeoutException e) {
-            e.printStackTrace();
-        }
+    private void multipleProducer() {
 
-//        for (int i = 0; i < 9; i++) {
-//            sequencer.claim(i);
-//            System.out.println("getCursor is " + sequencer.getCursor());
-//        }
-
-        for (int i = 0; i < 9; i++) {
-            long seq = sequencer.next(1);
-            sequencer.publish(seq);
-
-//            System.out.println("hasAvailableCapacity is " + sequencer.hasAvailableCapacity(5));
-        }
-        System.out.println("end");
-
-    }
-
-    private void sequence() {
-
-        Sequence sequence = new Sequence();
-        System.out.println("seq is " + sequence.get());
-        System.out.println("incrementAndGet is " + sequence.incrementAndGet());
-        System.out.println("seq is " + sequence.get());
-        System.out.println("addAndGet 2 is " + sequence.addAndGet(2));
-        System.out.println("seq is " + sequence.get());
-
-    }
-
-    private void disruptorWith() {
-
-        Thread main = Thread.currentThread();
-
-//        Disruptor<Integer[]> disruptor = new Disruptor(new OneEventFactory(), 2, Executors.defaultThreadFactory());
-        Disruptor<Integer[]> disruptor = new Disruptor(new OneEventFactory(), 4, Executors.defaultThreadFactory(), ProducerType.SINGLE, new BlockingWaitStrategy());
+        WaitStrategy waitStrategy = new BlockingWaitStrategy();
+        EventFactory eventFactory = new OneEventFactory();
+        ThreadFactory threadFactory = Executors.defaultThreadFactory();
+        ExecutorService executorService = Executors.newFixedThreadPool(2);
 
 
-        disruptor.handleEventsWith(new EventHandler<Integer[]>() {
+        Disruptor<Integer[]> disruptor = new Disruptor(eventFactory, 16, threadFactory, ProducerType.MULTI, waitStrategy);
+
+
+        //注册消费者
+        disruptor.handleEventsWith(new EventHandler<>() {
             @Override
             public void onEvent(Integer[] event, long sequence, boolean endOfBatch) throws Exception {
-                System.out.println("~~" + getClass().getSimpleName() + ".onEvent~~");
-//                try {
-//                    Thread.sleep(3000L);
-//                } catch (InterruptedException e) {
-//                    e.printStackTrace();
-//                }
-
+                System.out.println("~~onEvent~~");
                 System.out.println("sequence is " + sequence);
                 System.out.println("endOfBatch is " + endOfBatch);
                 System.out.println("event is " + event[0]);
 
-                System.out.println("main is " + main.getState());
-
+                System.out.println(Thread.currentThread());
                 try {
-                    Thread.sleep(3000L);
+                    Thread.sleep(100L);
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
             }
         });
+        disruptor.start();
 
 
-        RingBuffer<Integer[]> ringBuffer = disruptor.start();
+        //生产者
+        Runnable task = new Runnable() {
+            @Override
+            public void run() {
 
-        for (int i = 0; i < 19; i++) {
-            ringBuffer.publishEvent(new EventTranslator<Integer[]>() {
+                for (int i = 0; i < 10; i++) {
+                    disruptor.publishEvent(new EventTranslator<Integer[]>() {
+                        @Override
+                        public void translateTo(Integer[] event, long sequence) {
+                            System.out.println("~~translateTo~~");
+                            System.out.println("sequence is " + sequence);
+                            System.out.println("event is " + event[0]);
+
+                            event[0] = Integer.valueOf(999);
+                            System.out.println(Thread.currentThread());
+                            try {
+                                Thread.sleep(100L);
+                            } catch (InterruptedException e) {
+                                e.printStackTrace();
+                            }
+                        }
+                    });
+                }
+            }
+        };
+
+        //使用两个线程生产数据
+        executorService.submit(task);
+        executorService.submit(task);
+
+
+    }
+
+
+    private void singleProducer() {
+
+        WaitStrategy waitStrategy = new BlockingWaitStrategy();
+        EventFactory eventFactory = new OneEventFactory();
+        ThreadFactory threadFactory = new OneThreadFactory();
+
+        Disruptor<Integer[]> disruptor = new Disruptor(eventFactory, 16, threadFactory, ProducerType.SINGLE, waitStrategy);
+
+        System.out.println(disruptor);
+
+        //打印RingBuffer
+        for (int i = 0; i < disruptor.getRingBuffer().getBufferSize(); i++) {
+            System.out.println("[" + i + "]event is " + disruptor.getRingBuffer().get(i)[0]);
+        }
+
+        //注册消费者
+        disruptor.handleEventsWith(new EventHandler<>() {
+            @Override
+            public void onEvent(Integer[] event, long sequence, boolean endOfBatch) throws Exception {
+                System.out.println("~~onEvent~~");
+                System.out.println("sequence is " + sequence);
+                System.out.println("endOfBatch is " + endOfBatch);
+                System.out.println("event is " + event[0]);
+
+                System.out.println(Thread.currentThread());
+                try {
+                    Thread.sleep(100L);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        });
+        //注册多个消费者
+//        disruptor.handleEventsWith(new OneEventHandler(1))
+//                .handleEventsWith(new OneEventHandler(2));
+        disruptor.start();//启动线程
+
+
+        //发送数据到RingBuffer
+        for (int i = 0; i < 26; i++) {
+
+            disruptor.publishEvent(new EventTranslator<Integer[]>() {
                 @Override
                 public void translateTo(Integer[] event, long sequence) {
-                    System.out.println("~~" + getClass().getSimpleName() + ".translateTo~~");
-
-
-                    System.out.println("[T]sequence is " + sequence);
+                    System.out.println("~~translateTo~~");
+                    System.out.println("sequence is " + sequence);
                     System.out.println("event is " + event[0]);
+
+                    event[0] = Integer.valueOf(999);
+                    System.out.println(Thread.currentThread());
                 }
             });
         }
-
-    }
-
-    private void poller() {
-        EventFactory<Integer[]> eventFactory = new OneEventFactory();
-
-
-        Disruptor<Integer[]> disruptor = new Disruptor(eventFactory, 1, Executors.defaultThreadFactory(), ProducerType.SINGLE, new BlockingWaitStrategy());
-        RingBuffer<Integer[]> ringBuffer = disruptor.getRingBuffer();
-
-        Sequence sequence = new Sequence();
-        System.out.println("sequence is " + sequence);
-        ringBuffer.newPoller(sequence);
-
-
-//        long sequence = ringBuffer.next();
-//        System.out.println("sequence is " + sequence);
-
-
-    }
-
-    private void barrier() {
-        EventFactory<Integer[]> eventFactory = new OneEventFactory();
-
-
-        Disruptor<Integer[]> disruptor = new Disruptor(eventFactory, 1, Executors.defaultThreadFactory(), ProducerType.SINGLE, new BlockingWaitStrategy());
-        RingBuffer<Integer[]> ringBuffer = disruptor.getRingBuffer();
-        SequenceBarrier barrier = ringBuffer.newBarrier();
-
-        System.out.println(barrier);
-        System.out.println("getCursor is " + barrier.getCursor());
-        System.out.println("isAlerted is " + barrier.isAlerted());
-
-
-//        for (int i = 0; i < 10; i++) {
-//            long sequence = ringBuffer.next();
-//            ringBuffer.get(sequence);
-//            ringBuffer.publish(sequence);
-////            try {
-////                Thread.sleep(3000L);
-////            } catch (InterruptedException e) {
-////                e.printStackTrace();
-////            }
-//        }
-
-
-        Thread thread = new Thread(new Runnable() {
-            @Override
-            public void run() {
-
-                System.out.println("----------start");
-
-
-                try {
-                    long seq = barrier.waitFor(3);
-                    System.out.println("seq is " + seq);
-                } catch (AlertException e) {
-                    e.printStackTrace();
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                } catch (TimeoutException e) {
-                    e.printStackTrace();
-                }
-                System.out.println("----------end");
-
-            }
-        });
-        thread.start();
-
-        for (int i = 0; i < 1024; i++) {
-
-            long sequence = ringBuffer.next();
-            System.out.println("sequence is " + sequence);
-//            System.out.println("getState is " + thread.getState());
-
-
-            ringBuffer.get(sequence);
-
-            ringBuffer.publish(sequence);
-
-            try {
-                Thread.sleep(3000L);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-
-        }
-
-
-//        System.out.println("alert is " + barrier.alert());
-//        System.out.println("checkAlert is " + barrier.checkAlert());
-//        System.out.println("clearAlert is " + barrier.clearAlert());
-//        System.out.println("waitFor is " + barrier.waitFor(1));
-
-
-    }
-
-    private void disruptor() {
-        EventFactory<Integer[]> eventFactory = new OneEventFactory();
-        ThreadFactory threadFactory = new OneThreadFactory();
-//        ThreadFactory threadFactory = Executors.defaultThreadFactory();
-
-        Disruptor<Integer[]> disruptor = new Disruptor(eventFactory, 2, threadFactory, ProducerType.SINGLE, new BlockingWaitStrategy());
-//        Disruptor<Integer[]> disruptor = new Disruptor(new OneEventFactory(), 4, Executors.defaultThreadFactory(), ProducerType.SINGLE, new BlockingWaitStrategy());
-        System.out.println(disruptor);
-
-        RingBuffer<Integer[]> ringBuffer = disruptor.getRingBuffer();
-
-
-//        long sequence = ringBuffer.next();
-//        ringBuffer.publish(sequence);
-//        Integer[] integers = ringBuffer.get(0);
-//        System.out.println(sequence + " - " + integers[0] + " - " + ringBuffer.getCursor());
-
-
-        Thread main = Thread.currentThread();
-        Thread thread = new Thread(new Runnable() {
-            @Override
-            public void run() {
-
-                try {
-                    long sequence = ringBuffer.next();
-                    SequenceBarrier sequenceBarrier = ringBuffer.newBarrier(new Sequence());
-                    System.out.println("[C]" + Thread.currentThread().getState());
-                    long seq = sequenceBarrier.waitFor(0);
-                    Integer[] integers = ringBuffer.get(seq);
-                    System.out.println("[C]" + seq + " - " + integers[0] + " - " + ringBuffer.getCursor());
-                    System.out.println("[C]mian is " + main.getState());
-                } catch (AlertException e) {
-                    e.printStackTrace();
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                } catch (TimeoutException e) {
-                    e.printStackTrace();
-                }
-            }
-        });
-        thread.start();
-
-
-//        for (int i = 0; i < 13; i++) {
-//            long sequence = ringBuffer.next();
-//            Integer[] integers = ringBuffer.get(sequence);
-//            System.out.println(sequence + " - " + integers[0] + " - " + ringBuffer.getCursor());
-////            System.out.println("thread is " + thread.getState());
-//            ringBuffer.publish(sequence);
-//        }
     }
 
     class OneEventFactory implements EventFactory<Integer[]> {
@@ -405,4 +221,28 @@ public class DisruptorTrial {
         }
     }
 
+    class OneEventHandler implements EventHandler<Integer[]> {
+        int n;
+
+        public OneEventHandler(int n) {
+            this.n = n;
+        }
+
+        @Override
+        public void onEvent(Integer[] event, long sequence, boolean endOfBatch) throws Exception {
+            System.out.println("~~[" + this.n + "]onEvent~~");
+            System.out.println("sequence is " + sequence);
+            System.out.println("endOfBatch is " + endOfBatch);
+            System.out.println("event is " + event[0]);
+
+            if (n == 1) {
+                try {
+                    Thread.sleep(3000L);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+
+        }
+    }
 }

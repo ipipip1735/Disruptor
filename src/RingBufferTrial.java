@@ -12,12 +12,60 @@ public class RingBufferTrial {
 
 //        ringBufferTrial.create();//创建RingBuffer
 //        ringBufferTrial.put();//增加元素
+//        ringBufferTrial.translator();//使用翻译器增加元素
 //        ringBufferTrial.capacity();//获取体积
 //        ringBufferTrial.cursor();//指针操作
 //        ringBufferTrial.low();//获取最小指针
 //        ringBufferTrial.back();//反向读取
 
-//        ringBufferTrial.multipleProducer();//多生产者模式
+    }
+
+    private void translator() {
+        WaitStrategy waitStrategy = new BlockingWaitStrategy();
+        EventFactory eventFactory = new OneEventFactory();
+
+
+        RingBuffer<Integer[]> ringBuffer = RingBuffer.createSingleProducer(eventFactory, 4, waitStrategy);
+
+//        for (int i = 0; i < ringBuffer.getBufferSize(); i++) {
+//            System.out.println("[" + i + "]event is " + ringBuffer.get(i)[0]);
+//        }
+
+
+        //方式一：无参数
+        EventTranslator<Integer[]> translator = new EventTranslator<>() {
+            @Override
+            public void translateTo(Integer[] event, long sequence) {
+                System.out.println("~~translateTo~~");
+                System.out.println("sequence is " + sequence);
+                System.out.println("event is " + event[0]);
+
+                event[0] = Integer.valueOf(999);
+            }
+        };
+        ringBuffer.publishEvent(translator);
+
+
+        //方式二：带参数
+        EventTranslatorOneArg<Integer[], String> translatorOneArg = new EventTranslatorOneArg<>() {
+            @Override
+            public void translateTo(Integer[] event, long sequence, String arg0) {
+                System.out.println("~~translateTo~~");
+                System.out.println("sequence is " + sequence);
+                System.out.println("arg0 is " + arg0);
+                System.out.println("event is " + event[0]);
+
+                event[0] = Integer.valueOf(999);
+            }
+        };
+        ringBuffer.publishEvent(translatorOneArg, "xxx");
+
+
+        for (int i = 0; i < ringBuffer.getBufferSize(); i++) {
+            System.out.println("[" + i + "]event is " + ringBuffer.get(i)[0]);
+        }
+
+
     }
 
     private void put() {
@@ -51,9 +99,8 @@ public class RingBufferTrial {
         //反向读
         for (int i = 100; i > -200; i--) {
             Integer[] integers = ringBuffer.claimAndGetPreallocated(i);
-            System.out.println("[" + i +"]" + integers[0]);
+            System.out.println("[" + i + "]" + integers[0]);
         }
-
 
 
         //回退重写
@@ -93,32 +140,6 @@ public class RingBufferTrial {
 //            customer.set(i);
 //        }
 
-
-    }
-
-    private void multipleProducer() {
-        WaitStrategy waitStrategy = new BlockingWaitStrategy();
-        EventFactory eventFactory = new OneEventFactory();
-
-        RingBuffer<Integer[]> ringBuffer = RingBuffer.createMultiProducer(eventFactory, 4, waitStrategy);
-
-        Sequence customerOne = new Sequence();
-        Sequence customerTwo = new Sequence();
-        ringBuffer.addGatingSequences(customerOne, customerTwo);
-//        customerOne.set(0);
-//        customerTwo.set(0);
-
-        long seq;
-        seq = ringBuffer.next(1);
-//        ringBuffer.publish(seq);
-//        ringBuffer.publish(1);
-        seq = ringBuffer.getCursor();
-        System.out.println("getCursor is " + seq);
-
-        //        for (int i = 0; i < 50; i++) {
-//            ringBuffer.next();
-//            System.out.println("remainingCapacity is " + ringBuffer.remainingCapacity());
-//        }
 
     }
 
