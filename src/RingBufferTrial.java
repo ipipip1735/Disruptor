@@ -29,12 +29,11 @@ public class RingBufferTrial {
 
         RingBuffer<Integer[]> ringBuffer = RingBuffer.createSingleProducer(eventFactory, 16, waitStrategy);
 
-
-        //增加消费者
-        Sequence customer = new Sequence();
-        ringBuffer.addGatingSequences(customer);
         SequenceBarrier barrier = ringBuffer.newBarrier();
         EventPoller<Integer[]> poller = ringBuffer.newPoller();
+
+        //增加消费者
+        ringBuffer.addGatingSequences(poller.getSequence());
 
 
         new Thread(new Runnable() {
@@ -42,7 +41,7 @@ public class RingBufferTrial {
             public void run() {
                 while (true) {
                     try {
-                        barrier.waitFor(customer.get() + 2);
+                        barrier.waitFor(poller.getSequence().get() + 2);
 
                         EventPoller.PollState pollState = poller.poll(new EventPoller.Handler<Integer[]>() {
                             @Override
@@ -59,7 +58,7 @@ public class RingBufferTrial {
 
                     } catch (AlertException e) {
                         e.printStackTrace();
-                        break;
+                        break;//终止循环
                     } catch (InterruptedException e) {
                         e.printStackTrace();
                     } catch (TimeoutException e) {
@@ -85,7 +84,7 @@ public class RingBufferTrial {
 //            }
         }
 
-        barrier.alert();
+        barrier.alert();//停止消费者线程
     }
 
     private void barrier() {
@@ -124,7 +123,7 @@ public class RingBufferTrial {
                         customer.set(now);
                     } catch (AlertException e) {
                         e.printStackTrace();
-                        break;
+                        break;//终止循环
                     } catch (InterruptedException e) {
                         e.printStackTrace();
                     } catch (TimeoutException e) {
