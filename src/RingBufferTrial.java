@@ -13,10 +13,10 @@ public class RingBufferTrial {
 //        ringBufferTrial.create();//创建RingBuffer
 //        ringBufferTrial.put();//增加元素
 //        ringBufferTrial.barrier();//序号栅栏
-        ringBufferTrial.poller();//轮询器
+//        ringBufferTrial.poller();//轮询器
 //        ringBufferTrial.translator();//使用翻译器增加元素
 //        ringBufferTrial.capacity();//获取体积
-//        ringBufferTrial.cursor();//指针操作
+        ringBufferTrial.cursor();//指针操作
 //        ringBufferTrial.low();//获取最小指针
 //        ringBufferTrial.back();//反向读取
 
@@ -326,13 +326,40 @@ public class RingBufferTrial {
         WaitStrategy waitStrategy = new BlockingWaitStrategy();
         EventFactory eventFactory = new OneEventFactory();
 
-        RingBuffer<Integer[]> ringBuffer = RingBuffer.create(ProducerType.SINGLE, eventFactory, 4, waitStrategy);
+        RingBuffer<Integer[]> ringBuffer = RingBuffer.create(ProducerType.SINGLE, eventFactory, 8, waitStrategy);
 
 
-        ringBuffer.publish(0);
-        System.out.println("getCursor is " + ringBuffer.getCursor());
-        ringBuffer.publish(50);
-        System.out.println("getCursor is " + ringBuffer.getCursor());
+        //读阻塞
+        Sequence sequence = new Sequence();
+        ringBuffer.addGatingSequences(sequence);
+        SequenceBarrier sequenceBarrier = ringBuffer.newBarrier();
+
+        ringBuffer.publish(3);//更新cursor指针位置
+
+        try {
+            for (int i = 0; i < 999; i++) {
+                long s = sequenceBarrier.waitFor(i);//当i自增到4时将阻塞，因为Cursor指针执行索引3
+                System.out.println(s);
+            }
+
+        } catch (AlertException e) {
+            e.printStackTrace();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        } catch (TimeoutException e) {
+            e.printStackTrace();
+        }
+
+
+        //写阻塞
+//        Sequence sequence = new Sequence();
+//        ringBuffer.addGatingSequences(sequence);
+//        sequence.set(2);//消费者消费3个元素（索引0~2）
+//
+//        for (int i = 0; i < 99999; i++) {
+//            System.out.println(ringBuffer.next());//读取到
+//        }
+
     }
 
     private void create() {
