@@ -14,9 +14,9 @@ public class RingBufferTrial {
 //        ringBufferTrial.put();//增加元素
 //        ringBufferTrial.barrier();//序号栅栏
 //        ringBufferTrial.poller();//轮询器
-//        ringBufferTrial.translator();//使用翻译器增加元素
+        ringBufferTrial.translator();//使用翻译器增加元素
 //        ringBufferTrial.capacity();//获取体积
-        ringBufferTrial.cursor();//指针操作
+//        ringBufferTrial.cursor();//指针操作
 //        ringBufferTrial.low();//获取最小指针
 //        ringBufferTrial.back();//反向读取
 
@@ -337,7 +337,7 @@ public class RingBufferTrial {
         ringBuffer.publish(3);//更新cursor指针位置
 
         try {
-            for (int i = 0; i < 999; i++) {
+            for (int i = 0; i < 99999; i++) {
                 long s = sequenceBarrier.waitFor(i);//当i自增到4时将阻塞，因为Cursor指针执行索引3
                 System.out.println(s);
             }
@@ -349,6 +349,8 @@ public class RingBufferTrial {
         } catch (TimeoutException e) {
             e.printStackTrace();
         }
+
+
 
 
         //写阻塞
